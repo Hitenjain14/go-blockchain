@@ -4,18 +4,17 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
-	"io"
 
 	"github.com/hitenjain14/go-blockchain/crypto"
 	"github.com/hitenjain14/go-blockchain/types"
 )
 
 type Header struct {
-	Version   uint32
-	PrevBlock types.Hash
-	Timestamp int64
-	Height    uint32
-	Nonce     uint64
+	Version       uint32
+	PrevBlockHash types.Hash
+	Timestamp     int64
+	Height        uint32
+	Nonce         uint64
 }
 
 type Block struct {
@@ -45,6 +44,13 @@ func (b *Block) Verify() error {
 	if !b.Signature.Verify(b.Validator, b.Hash(&BlockHasher{}).ToSlice()) {
 		return fmt.Errorf("invalid block signature")
 	}
+
+	for _, tx := range b.Transactions {
+		if err := tx.Verify(); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -57,30 +63,34 @@ func NewBlock(header *Header, txx []Transaction) *Block {
 
 }
 
-func (b *Block) Hash(hasher Hasher[*Block]) types.Hash {
+func (b *Block) Hash(hasher Hasher[*Header]) types.Hash {
 
-	b.hash = hasher.Hash(b)
+	b.hash = hasher.Hash(b.Header)
 
 	return b.hash
 }
 
-func (b *Block) Decode(r io.Reader, dec Decoder[*Block]) error {
-	return dec.Decode(r, b)
+func (b *Block) Decode(dec Decoder[*Block]) error {
+	return dec.Decode(b)
 }
 
-func (b *Block) Encode(w io.Writer, enc Encoder[*Block]) error {
-	return enc.Encode(w, b)
+func (b *Block) Encode(enc Encoder[*Block]) error {
+	return enc.Encode(b)
 }
 
-func (b *Block) HeaderData() []byte {
+func (h *Header) Bytes() []byte {
 	buf := &bytes.Buffer{}
 	enc := gob.NewEncoder(buf)
-	err := enc.Encode(b.Header)
+	err := enc.Encode(h)
 	if err != nil {
 		panic(err)
 	}
 
 	return buf.Bytes()
+}
+
+func (b *Block) AddTransaction(tx *Transaction) {
+	b.Transactions = append(b.Transactions, *tx)
 }
 
 // func (h *Header) EncodeBinary(w io.Writer) error {

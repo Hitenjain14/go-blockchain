@@ -9,33 +9,9 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func randomBlock(height uint32) *Block {
-	header := &Header{
-		Version:   1,
-		PrevBlock: types.RandomHash(),
-		Timestamp: time.Now().UnixNano(),
-		Height:    height,
-	}
-
-	txx := Transaction{
-		Data: []byte("Hello"),
-	}
-
-	return NewBlock(header, []Transaction{txx})
-
-}
-
-func randomBlockWithSignature(t *testing.T, height uint32) *Block {
-	b := randomBlock(height)
-	privKey := crypto.GeneratePrivateKey()
-	err := b.Sign(privKey)
-	assert.Nil(t, err)
-	return b
-}
-
 func TestSignBlock(t *testing.T) {
 
-	b := randomBlock(1)
+	b := randomBlock(t, 1, types.Hash{})
 
 	privKey := crypto.GeneratePrivateKey()
 
@@ -54,4 +30,26 @@ func TestSignBlock(t *testing.T) {
 	b.Validator = otherPubKey
 	assert.NotNil(t, b.Verify())
 
+}
+
+func randomBlock(t *testing.T, height uint32, prevBlockHash types.Hash) *Block {
+	header := &Header{
+		Version:       1,
+		PrevBlockHash: prevBlockHash,
+		Timestamp:     time.Now().UnixNano(),
+		Height:        height,
+	}
+
+	txx := randomSignedTransaction(t)
+
+	return NewBlock(header, []Transaction{*txx})
+
+}
+
+func randomBlockWithSignature(t *testing.T, height uint32, prevBlockHash types.Hash) *Block {
+	b := randomBlock(t, height, prevBlockHash)
+	privKey := crypto.GeneratePrivateKey()
+	err := b.Sign(privKey)
+	assert.Nil(t, err)
+	return b
 }
