@@ -2,8 +2,10 @@ package core
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/gob"
 	"fmt"
+	"time"
 
 	"github.com/hitenjain14/go-blockchain/crypto"
 	"github.com/hitenjain14/go-blockchain/types"
@@ -12,14 +14,14 @@ import (
 type Header struct {
 	Version       uint32
 	PrevBlockHash types.Hash
+	DataHash      types.Hash
 	Timestamp     int64
 	Height        uint32
-	Nonce         uint64
 }
 
 type Block struct {
 	*Header
-	Transactions []Transaction
+	Transactions []*Transaction
 	Validator    crypto.PublicKey
 	Signature    *crypto.Signature
 	hash         types.Hash //header hash cached
@@ -51,15 +53,23 @@ func (b *Block) Verify() error {
 		}
 	}
 
+	dataHash, err := CalculateDataHash(b.Transactions)
+	if err != nil {
+		return err
+	}
+	if dataHash != b.DataHash {
+		return fmt.Errorf("block (%s) has invalid data hash", b.Hash(BlockHasher{}))
+	}
+
 	return nil
 }
 
-func NewBlock(header *Header, txx []Transaction) *Block {
+func NewBlock(header *Header, txx []*Transaction) (*Block, error) {
 
 	return &Block{
 		Header:       header,
 		Transactions: txx,
-	}
+	}, nil
 
 }
 
@@ -90,7 +100,41 @@ func (h *Header) Bytes() []byte {
 }
 
 func (b *Block) AddTransaction(tx *Transaction) {
-	b.Transactions = append(b.Transactions, *tx)
+	b.Transactions = append(b.Transactions, tx)
+}
+
+func CalculateDataHash(txx []*Transaction) (hash types.Hash, err error) {
+
+	buf := &bytes.Buffer{}
+
+	for _, tx := range txx {
+		err = tx.Encode(NewGobTxEncoder(buf))
+		if err != nil {
+			return
+		}
+	}
+
+	hash = sha256.Sum256(buf.Bytes())
+
+	return
+}
+
+func NewBlockFromPrevHeader(prevHeader *Header, txx []*Transaction) (*Block, error) {
+	dataHash, err := CalculateDataHash(txx)
+	if err != nil {
+		return nil, err
+	}
+
+	header := &Header{
+		Version:       1,
+		DataHash:      dataHash,
+		PrevBlockHash: BlockHasher{}.Hash(prevHeader),
+		Timestamp:     time.Now().UnixNano(),
+		Height:        prevHeader.Height + 1,
+	}
+
+	return NewBlock(header, txx)
+
 }
 
 // func (h *Header) EncodeBinary(w io.Writer) error {

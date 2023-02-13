@@ -21,5 +21,9 @@ func TestConnect(t *testing.T) {
 
 	rpc := <-trb.Consume()
 	assert.Equal(t, rpc.From, tra.Addr())
-	assert.Equal(t, rpc.Payload, msg)
+	buf := make([]byte, len(msg))
+	n, err := rpc.Payload.Read(buf)
+	assert.Nil(t, err)
+	assert.Equal(t, n, len(msg))
+	assert.Equal(t, buf, msg)
 }
